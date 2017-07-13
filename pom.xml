@@ -23,7 +23,8 @@
   <properties>
     <version.jmh>1.19</version.jmh>
     <!-- This is here so we can override the version from parent, i.e. benchmark other version -->
-    <drools.bom.version>${version.org.kie}</drools.bom.version>
+    <drools.bom.version>7.1.0-SNAPSHOT</drools.bom.version>
+    <uberfire.version>1.1.0-SNAPSHOT</uberfire.version>
   </properties>
 
   <dependencyManagement>
@@ -34,6 +35,11 @@
         <version>${drools.bom.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.uberfire</groupId>
+        <artifactId>uberfire-maven-support</artifactId>
+        <version>${uberfire.version}</version>
       </dependency>
       <dependency>
         <groupId>org.openjdk.jmh</groupId>
