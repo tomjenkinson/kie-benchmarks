@@ -57,7 +57,7 @@ public class GeneratingUserGroupCallback implements UserGroupCallback {
     }
 
     @Override
-    public List<String> getGroupsForUser(String user) {
+    public List<String> getGroupsForUser(String user, List<String> a,List<String> b) {
         List<String> groupsForUser = new LinkedList<String>();
         if (users.contains(user)) {
             groupsForUser.add(originalGroup);

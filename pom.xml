@@ -6,8 +6,8 @@
 
   <parent>
     <groupId>org.kie</groupId>
-    <artifactId>kie-parent</artifactId>
-    <version>7.3.0-SNAPSHOT</version>
+    <artifactId>kie-parent-with-dependencies</artifactId>
+    <version>6.5.1-SNAPSHOT</version>
     <!-- relativePath causes out-of-date problems on hudson slaves -->
     <!--<relativePath>../droolsjbpm-build-bootstrap/pom.xml</relativePath>-->
   </parent>
