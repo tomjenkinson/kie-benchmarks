@@ -4,7 +4,10 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.List;
@@ -13,11 +16,19 @@ import java.util.Map.Entry;
 import java.util.Properties;
 
 import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
+import javax.sql.XADataSource;
 import javax.transaction.Status;
 import javax.transaction.UserTransaction;
 
+import com.arjuna.ats.jta.TransactionManager;
+import com.arjuna.ats.jta.common.JTAEnvironmentBean;
+import com.arjuna.ats.jta.common.jtaPropertyManager;
+import com.arjuna.common.internal.util.propertyservice.BeanPopulator;
+import org.apache.commons.dbcp2.managed.BasicManagedDataSource;
+import org.apache.commons.dbcp2.managed.ManagedConnection;
 import org.drools.persistence.jta.JtaTransactionManager;
 import org.jbpm.runtime.manager.impl.DefaultRegisterableItemsFactory;
 import org.jbpm.runtime.manager.impl.jpa.EntityManagerFactoryManager;
@@ -40,8 +51,6 @@ import org.kie.internal.runtime.manager.context.ProcessInstanceIdContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import bitronix.tm.resource.jdbc.PoolingDataSource;
-
 public class JBPMController {
 
     public enum Strategy {
@@ -56,7 +65,8 @@ public class JBPMController {
     private String persistenceUnitName = "org.jbpm.persistence.jpa";
 
     private EntityManagerFactory emf;
-    private PoolingDataSource ds;
+    private BasicManagedDataSource ds;
+    private Connection conn;
 
     private RuntimeManagerFactory managerFactory = RuntimeManagerFactory.Factory.get();
     protected RuntimeManager manager;
@@ -91,6 +101,7 @@ public class JBPMController {
     public void setUp() throws Exception {
         if (persistence) {
             ds = setupPoolingDataSource();
+            log.info("About to create PU");
             emf = Persistence.createEntityManagerFactory(persistenceUnitName);
             if (JBPMTestConfig.getInstance().getDatabaseName().equals("perfdb")) {
                 // clear tables in OracleDB
@@ -142,7 +153,11 @@ public class JBPMController {
 
             }
             if (ds != null) {
-                ds.close();
+                try {
+                    ds.close();
+                } catch (SQLException e) {
+                    throw new RuntimeException("Error closing data source", e);
+                }
                 ds = null;
             }
             try {
@@ -192,17 +207,23 @@ public class JBPMController {
         this.userGroupCallback = new JBossUserGroupCallbackImpl("classpath:/usergroups.properties");
     }
 
-    protected PoolingDataSource setupPoolingDataSource() {
+    protected BasicManagedDataSource setupPoolingDataSource() {
+        log.info("Setting up data source!");
         Properties dsProps = getDatasourceProperties();
         String jdbcUrl = dsProps.getProperty("url");
         String driverClass = dsProps.getProperty("driverClassName");
 
         // Setup the datasource
-        PoolingDataSource pds = setupPoolingDataSource(dsProps, "jdbc/jbpm-ds");
-        if (driverClass.startsWith("org.h2")) {
+        BasicManagedDataSource pds = setupPoolingDataSource(dsProps, "jdbc/jbpm-ds");
+        /*if (driverClass.startsWith("org.h2")) {
             pds.getDriverProperties().setProperty("url", jdbcUrl);
+        }*/
+        try {
+            conn = pds.getConnection();
+            log.info("Connection created! using: " + conn.getClass());
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not create datasource!", e);
         }
-        pds.init();
         return pds;
     }
 
@@ -217,7 +238,7 @@ public class JBPMController {
         String[] keyArr = { "serverName", "portNumber", "databaseName", "url", "user", "password", "driverClassName",
                 "className", "maxPoolSize", "allowLocalTransactions" };
         String[] defaultPropArr = { "", "", "", "jdbc:h2:mem:test;MVCC=true", "sa", "", "org.h2.Driver",
-                "bitronix.tm.resource.jdbc.lrc.LrcXADataSource", "16", "true" };
+                "org.h2.jdbcx.JdbcDataSource", "16", "true" };
         if (keyArr.length != defaultPropArr.length) {
             throw new RuntimeException("Unequal number of keys for default properties");
         }
@@ -268,62 +289,92 @@ public class JBPMController {
      * 
      * @return PoolingDataSource that has been set up but _not_ initialized.
      */
-    public static PoolingDataSource setupPoolingDataSource(Properties dsProps, String datasourceName) {
-        PoolingDataSource pds = new PoolingDataSource();
+    public static BasicManagedDataSource setupPoolingDataSource(Properties dsProps, String datasourceName) {
+        BasicManagedDataSource pds = new BasicManagedDataSource();
 
         // The name must match what's in the persistence.xml!
-        pds.setUniqueName(datasourceName);
+        pds.setJmxName(datasourceName);//setUniqueName(datasourceName);
+        //pds.setXADataSource(dsProps.getProperty("className"));//setClassName(dsProps.getProperty("className"));
 
-        pds.setClassName(dsProps.getProperty("className"));
 
-        pds.setMaxPoolSize(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
-        pds.setAllowLocalTransactions(Boolean.parseBoolean(dsProps.getProperty("allowLocalTransactions")));
-        for (String propertyName : new String[] { "user", "password" }) {
-            pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+
+        pds.setMaxTotal(Integer.parseInt(dsProps.getProperty("maxPoolSize")));//setMaxPoolSize(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
+        //pds.setAllowLocalTransactions(Boolean.parseBoolean(dsProps.getProperty("allowLocalTransactions")));
+        pds.setUsername(dsProps.getProperty("user"));
+        pds.setPassword(dsProps.getProperty("password"));
+
+
+//        for (String propertyName : new String[] { "user", "password" }) {
+//            pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+//        }
+        String xadsClassName = dsProps.getProperty("className");
+
+        try {
+            XADataSource xads = (XADataSource) Class.forName(xadsClassName).newInstance();
+            Class<?> xadsClass = xads.getClass();
+
+            String driverClass = dsProps.getProperty("driverClassName");
+            if (driverClass.startsWith("org.h2") ) {
+                log.info("setting URL");
+                    xadsClass.getMethod("setURL", new Class[]{String.class}).invoke(xads, dsProps.getProperty("url"));
+            } /*else {
+                pds.setClassName(dsProps.getProperty("className"));
+
+                if (driverClass.startsWith("oracle")) {
+                    pds.getDriverProperties().put("driverType", "thin");
+                    pds.getDriverProperties().put("URL", dsProps.getProperty("url"));
+                } else if (driverClass.startsWith("com.ibm.db2")) {
+                    // http://docs.codehaus.org/display/BTM/JdbcXaSupportEvaluation#JdbcXaSupportEvaluation-IBMDB2
+                    pds.getDriverProperties().put("databaseName", dsProps.getProperty("databaseName"));
+                    pds.getDriverProperties().put("driverType", "4");
+                    pds.getDriverProperties().put("serverName", dsProps.getProperty("serverName"));
+                    pds.getDriverProperties().put("portNumber", dsProps.getProperty("portNumber"));
+                } else if (driverClass.startsWith("com.microsoft")) {
+                    for (String propertyName : new String[]{"serverName", "portNumber", "databaseName"}) {
+                        pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+                    }
+                    pds.getDriverProperties().put("URL", dsProps.getProperty("url"));
+                    pds.getDriverProperties().put("selectMethod", "cursor");
+                    pds.getDriverProperties().put("InstanceName", "MSSQL01");
+                } else if (driverClass.startsWith("com.mysql")) {
+                    for (String propertyName : new String[]{"databaseName", "serverName", "portNumber", "url"}) {
+                        pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+                    }
+                } else if (driverClass.startsWith("com.sybase")) {
+                    for (String propertyName : new String[]{"databaseName", "portNumber", "serverName"}) {
+                        pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+                    }
+                    pds.getDriverProperties().put("REQUEST_HA_SESSION", "false");
+                    pds.getDriverProperties().put("networkProtocol", "Tds");
+                } else if (driverClass.startsWith("org.postgresql")) {
+                    for (String propertyName : new String[]{"databaseName", "portNumber", "serverName"}) {
+                        pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
+                    }
+                } else {
+                    throw new RuntimeException("Unknown driver class: " + driverClass);
+                }
+            }*/
+
+            pds.setXaDataSourceInstance(xads);
+            pds.setTransactionManager(TransactionManager.transactionManager());
+
+
+
+            InitialContext initContext = new InitialContext();
+            initContext.rebind(datasourceName, pds);
+
+            initContext.rebind("java:comp/UserTransaction", com.arjuna.ats.jta.UserTransaction.userTransaction());
+            initContext.rebind("java:comp/TransactionManager", TransactionManager.transactionManager());
+            initContext.rebind("java:comp/TransactionSynchronizationRegistry", new com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple());
+            /* just debugging stuff, didn't help either to turn off tx timeout
+            JTAEnvironmentBean jtaEnvironmentBean = jtaPropertyManager.getJTAEnvironmentBean();
+            jtaEnvironmentBean.setXaTransactionTimeoutEnabled(false);*/
+
+
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException | NamingException e) {
+            throw new RuntimeException(e);
         }
 
-        String driverClass = dsProps.getProperty("driverClassName");
-        if (driverClass.startsWith("org.h2") || driverClass.startsWith("org.hsqldb")) {
-            for (String propertyName : new String[] { "url", "driverClassName" }) {
-                pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
-            }
-        } else {
-            pds.setClassName(dsProps.getProperty("className"));
-
-            if (driverClass.startsWith("oracle")) {
-                pds.getDriverProperties().put("driverType", "thin");
-                pds.getDriverProperties().put("URL", dsProps.getProperty("url"));
-            } else if (driverClass.startsWith("com.ibm.db2")) {
-                // http://docs.codehaus.org/display/BTM/JdbcXaSupportEvaluation#JdbcXaSupportEvaluation-IBMDB2
-                pds.getDriverProperties().put("databaseName", dsProps.getProperty("databaseName"));
-                pds.getDriverProperties().put("driverType", "4");
-                pds.getDriverProperties().put("serverName", dsProps.getProperty("serverName"));
-                pds.getDriverProperties().put("portNumber", dsProps.getProperty("portNumber"));
-            } else if (driverClass.startsWith("com.microsoft")) {
-                for (String propertyName : new String[] { "serverName", "portNumber", "databaseName" }) {
-                    pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
-                }
-                pds.getDriverProperties().put("URL", dsProps.getProperty("url"));
-                pds.getDriverProperties().put("selectMethod", "cursor");
-                pds.getDriverProperties().put("InstanceName", "MSSQL01");
-            } else if (driverClass.startsWith("com.mysql")) {
-                for (String propertyName : new String[] { "databaseName", "serverName", "portNumber", "url" }) {
-                    pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
-                }
-            } else if (driverClass.startsWith("com.sybase")) {
-                for (String propertyName : new String[] { "databaseName", "portNumber", "serverName" }) {
-                    pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
-                }
-                pds.getDriverProperties().put("REQUEST_HA_SESSION", "false");
-                pds.getDriverProperties().put("networkProtocol", "Tds");
-            } else if (driverClass.startsWith("org.postgresql")) {
-                for (String propertyName : new String[] { "databaseName", "portNumber", "serverName" }) {
-                    pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
-                }
-            } else {
-                throw new RuntimeException("Unknown driver class: " + driverClass);
-            }
-        }
 
         return pds;
     }
