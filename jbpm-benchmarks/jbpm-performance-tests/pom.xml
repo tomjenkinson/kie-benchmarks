@@ -25,13 +25,13 @@
     <startScriptLocation>./run.sh</startScriptLocation>
 
     <!-- Duration (in seconds), Iteration -->
-    <runType>Iteration</runType>
-    <duration>300</duration>
-    <iterations>1</iterations>
+    <runType>Duration</runType>
+    <duration>10</duration>
+    <iterations>10</iterations>
     <expectedRate>30</expectedRate>
 
-    <warmUp>false</warmUp>
-    <warmUpCount>1</warmUpCount>
+    <warmUp>true</warmUp>
+    <warmUpCount>10</warmUpCount>
     <warmUpTime>30</warmUpTime>
     <auditLogging>true</auditLogging>
 
@@ -72,7 +72,7 @@
     <maven.jdbc.db.name>H2</maven.jdbc.db.name>
     <maven.hibernate.hbm2ddl>create-drop</maven.hibernate.hbm2ddl>
     <maven.hibernate.dialect>org.hibernate.dialect.H2Dialect</maven.hibernate.dialect>
-    <maven.datasource.classname>bitronix.tm.resource.jdbc.lrc.LrcXADataSource</maven.datasource.classname>
+    <maven.datasource.classname>org.h2.jdbcx.JdbcDataSource</maven.datasource.classname>
     <maven.jdbc.driver.class>org.h2.Driver</maven.jdbc.driver.class>
     <maven.jdbc.password />
     <maven.jdbc.username>sa</maven.jdbc.username>
@@ -171,9 +171,38 @@
       <groupId>org.hibernate.javax.persistence</groupId>
       <artifactId>hibernate-jpa-2.1-api</artifactId>
     </dependency>
-    <dependency>
+    <!--<dependency>
       <groupId>org.codehaus.btm</groupId>
       <artifactId>btm</artifactId>
+    </dependency>-->
+    <dependency>
+      <groupId>org.jboss.narayana.jta</groupId>
+      <artifactId>narayana-jta</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-dbcp2</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-pool2</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>simple-jndi</groupId>
+      <artifactId>simple-jndi</artifactId>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.jboss.spec.javax.transaction</groupId>
@@ -241,7 +270,7 @@
             <argument>-Djbpm.concurrentUsersCount=${jbpm.concurrentUsersCount}</argument>
             <argument>-Djbpm.locking=${jbpm.locking}</argument>
             <argument>-Djbpm.ht.eager=${jbpm.ht.eager}</argument>
-
+            <!--<argument>-agentlib:jdwp=transport=dt_socket,server=n,address=mmacik.brq.redhat.com:5005,suspend=y,onuncaught=n</argument>-->
             <argument>-classpath</argument>
             <classpath />
             <argument>org.kie.perf.Executor</argument>
@@ -264,6 +293,11 @@
         <maven.jdbc.db.name>perfdb</maven.jdbc.db.name>
         <maven.datasource.classname>oracle.jdbc.xa.client.OracleXADataSource</maven.datasource.classname>
         <maven.jdbc.driver.class>oracle.jdbc.driver.OracleDriver</maven.jdbc.driver.class>
+        <maven.jdbc.username>bpms</maven.jdbc.username>
+        <maven.jdbc.password>bpms</maven.jdbc.password>
+        <maven.jdbc.url>jdbc:oracle:thin:@brmsperf04db.mw.lab.eng.bos.redhat.com:1521:perfdb</maven.jdbc.url>
+        <maven.jdbc.db.server>brmsperf04db.mw.lab.eng.bos.redhat.com</maven.jdbc.db.server>
+        <maven.jdbc.db.port>1521</maven.jdbc.db.port>
       </properties>
       <dependencyManagement>
         <dependencies>
@@ -293,5 +327,12 @@
       <email>mmacik@redhat.com</email>
     </developer>
   </developers>
+
+  <repositories>
+    <repository>
+      <id>qa-jdbc-drivers</id>
+      <url>http://www.qa.jboss.com/jdbc-drivers/maven2/</url>
+    </repository>
+  </repositories>
 
 </project>
