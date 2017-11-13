@@ -38,8 +38,8 @@
     <appender-ref ref="asyncWarnConsoleAppender" />
   </logger>
 
-  <logger name="bitronix.tm">
-    <level value="error" />
+  <logger name="org.apache.commons.dbcp2">
+    <level value="info" />
     <appender-ref ref="asyncWarnConsoleAppender" />
   </logger>
 
