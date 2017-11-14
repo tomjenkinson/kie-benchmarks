@@ -27,11 +27,11 @@
     <!-- Duration (in seconds), Iteration -->
     <runType>Duration</runType>
     <duration>10</duration>
-    <iterations>1</iterations>
+    <iterations>10</iterations>
     <expectedRate>30</expectedRate>
 
     <warmUp>true</warmUp>
-    <warmUpCount>1000</warmUpCount>
+    <warmUpCount>10</warmUpCount>
     <warmUpTime>30</warmUpTime>
     <auditLogging>true</auditLogging>
 
@@ -190,6 +190,16 @@
       </exclusions>
     </dependency>
     <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-pool2</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
       <groupId>simple-jndi</groupId>
       <artifactId>simple-jndi</artifactId>
       <scope>compile</scope>
@@ -283,6 +293,11 @@
         <maven.jdbc.db.name>perfdb</maven.jdbc.db.name>
         <maven.datasource.classname>oracle.jdbc.xa.client.OracleXADataSource</maven.datasource.classname>
         <maven.jdbc.driver.class>oracle.jdbc.driver.OracleDriver</maven.jdbc.driver.class>
+        <maven.jdbc.username>bpms</maven.jdbc.username>
+        <maven.jdbc.password>bpms</maven.jdbc.password>
+        <maven.jdbc.url>jdbc:oracle:thin:@brmsperf04db.mw.lab.eng.bos.redhat.com:1521:perfdb</maven.jdbc.url>
+        <maven.jdbc.db.server>brmsperf04db.mw.lab.eng.bos.redhat.com</maven.jdbc.db.server>
+        <maven.jdbc.db.port>1521</maven.jdbc.db.port>
       </properties>
       <dependencyManagement>
         <dependencies>
@@ -312,5 +327,12 @@
       <email>mmacik@redhat.com</email>
     </developer>
   </developers>
+
+  <repositories>
+    <repository>
+      <id>qa-jdbc-drivers</id>
+      <url>http://www.qa.jboss.com/jdbc-drivers/maven2/</url>
+    </repository>
+  </repositories>
 
 </project>
