@@ -75,7 +75,7 @@ public class JBPMController {
     private String persistenceUnitName = "org.jbpm.persistence.jpa";
 
     private EntityManagerFactory emf;
-    private BasicDataSource ds;
+    private PoolingDataSource ds;
     private Connection conn;
 
     private RuntimeManagerFactory managerFactory = RuntimeManagerFactory.Factory.get();
@@ -217,14 +217,14 @@ public class JBPMController {
         this.userGroupCallback = new JBossUserGroupCallbackImpl("classpath:/usergroups.properties");
     }
 
-    protected BasicDataSource setupPoolingDataSource() {
+    protected PoolingDataSource setupPoolingDataSource() {
         log.info("Setting up data source!");
         Properties dsProps = getDatasourceProperties();
         String jdbcUrl = dsProps.getProperty("url");
         String driverClass = dsProps.getProperty("driverClassName");
 
         // Setup the datasource
-        BasicDataSource pds = setupPoolingDataSource(dsProps, "jdbc/jbpm-ds");
+        PoolingDataSource pds = setupPoolingDataSource(dsProps, "jdbc/jbpm-ds");
         /*if (driverClass.startsWith("org.h2")) {
             pds.getDriverProperties().setProperty("url", jdbcUrl);
         }*/
@@ -299,7 +299,7 @@ public class JBPMController {
      * 
      * @return PoolingDataSource that has been set up but _not_ initialized.
      */
-    public static BasicDataSource setupPoolingDataSource(Properties dsProps, String datasourceName) {
+    public static PoolingDataSource setupPoolingDataSource(Properties dsProps, String datasourceName) {
 //        for (String propertyName : new String[] { "user", "password" }) {
 //            pds.getDriverProperties().put(propertyName, dsProps.getProperty(propertyName));
 //        }
@@ -388,13 +388,13 @@ public class JBPMController {
             initContext.rebind("java:comp/UserTransaction", com.arjuna.ats.jta.UserTransaction.userTransaction());
             initContext.rebind("java:comp/TransactionManager", TransactionManager.transactionManager());
             initContext.rebind("java:comp/TransactionSynchronizationRegistry", new com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple());
-            initContext.rebind(datasourceName, pds);
+            initContext.rebind(datasourceName, transactional);
             /*arjPropertyManager.getCoordinatorEnvironmentBean().setDefaultTimeout(20000);
             arjPropertyManager.getCoordinatorEnvironmentBean().setCommitOnePhase(true);*/
             /* just debugging stuff, didn't help either to turn off tx timeout
             JTAEnvironmentBean jtaEnvironmentBean = jtaPropertyManager.getJTAEnvironmentBean();
             jtaEnvironmentBean.setXaTransactionTimeoutEnabled(false);*/
-            return pds;
+            return transactional;
 
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException | NamingException e) {
             throw new RuntimeException(e);
