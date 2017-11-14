@@ -29,6 +29,7 @@ import com.arjuna.ats.jta.TransactionManager;
 import com.arjuna.ats.jta.common.JTAEnvironmentBean;
 import com.arjuna.ats.jta.common.jtaPropertyManager;
 import com.arjuna.common.internal.util.propertyservice.BeanPopulator;
+import oracle.jdbc.xa.client.OracleXADataSource;
 import org.apache.commons.dbcp2.BasicDataSource;
 import org.apache.commons.dbcp2.ConnectionFactory;
 import org.apache.commons.dbcp2.DriverConnectionFactory;
@@ -319,8 +320,8 @@ public class JBPMController {
                 System.out.println(dsProps.getProperty("password"));
                 xadsClass.getMethod("setDriverType", new Class[]{String.class}).invoke(xads, "thin");
                 xadsClass.getMethod("setURL", new Class[]{String.class}).invoke(xads, dsProps.getProperty("url"));
-                xadsClass.getMethod("setUser", new Class[]{String.class}).invoke(xads, dsProps.getProperty("user").toUpperCase());
-                xadsClass.getMethod("setPassword", new Class[]{String.class}).invoke(xads, dsProps.getProperty("password").toUpperCase());
+                xadsClass.getMethod("setUser", new Class[]{String.class}).invoke(xads, dsProps.getProperty("user"));
+                xadsClass.getMethod("setPassword", new Class[]{String.class}).invoke(xads, dsProps.getProperty("password"));
             } /*else {
                 pds.setClassName(dsProps.getProperty("className"));
 
