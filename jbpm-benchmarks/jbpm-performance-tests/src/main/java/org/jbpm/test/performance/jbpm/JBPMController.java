@@ -36,7 +36,9 @@ import org.apache.commons.dbcp2.PoolableConnection;
 import org.apache.commons.dbcp2.PoolableConnectionFactory;
 import org.apache.commons.dbcp2.PoolingDataSource;
 import org.apache.commons.dbcp2.managed.BasicManagedDataSource;
+import org.apache.commons.dbcp2.managed.DataSourceXAConnectionFactory;
 import org.apache.commons.dbcp2.managed.ManagedConnection;
+import org.apache.commons.dbcp2.managed.ManagedDataSource;
 import org.apache.commons.pool2.ObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.drools.persistence.jta.JtaTransactionManager;
@@ -320,14 +322,17 @@ public class JBPMController {
                 xadsClass.getMethod("setPassword", new Class[]{String.class}).invoke(xads, dsProps.getProperty("password").toUpperCase());
             }
 
-            ConnectionFactory connectionFactory = new DriverConnectionFactory(new com.arjuna.ats.jdbc.TransactionalDriver(), "jdbc:arjuna:sharedDataSource", new Properties());
+            DataSourceXAConnectionFactory connectionFactory = new DataSourceXAConnectionFactory (TransactionManager.transactionManager(), xads);
             PoolableConnectionFactory poolableConnectionFactory = new PoolableConnectionFactory(connectionFactory, null);
+            poolableConnectionFactory.setRollbackOnReturn(false);
+            poolableConnectionFactory.setEnableAutoCommitOnReturn(false);
             ObjectPool<PoolableConnection> connectionPool = new GenericObjectPool<>(poolableConnectionFactory);
             poolableConnectionFactory.setPool(connectionPool);
-            PoolingDataSource<PoolableConnection> transactional = new PoolingDataSource<>(connectionPool);
+            ManagedDataSource<PoolableConnection> transactional = new ManagedDataSource<>(connectionPool, connectionFactory.getTransactionRegistry());
+
 
             InitialContext initContext = new InitialContext();
-            initContext.rebind("sharedDataSource", xads);
+//            initContext.rebind("sharedDataSource", xads);
 
             initContext.rebind("java:comp/UserTransaction", com.arjuna.ats.jta.UserTransaction.userTransaction());
             initContext.rebind("java:comp/TransactionManager", TransactionManager.transactionManager());
