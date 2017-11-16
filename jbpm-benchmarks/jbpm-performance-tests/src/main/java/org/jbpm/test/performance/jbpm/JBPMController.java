@@ -5,9 +5,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.List;
@@ -23,26 +21,16 @@ import javax.sql.XADataSource;
 import javax.transaction.Status;
 import javax.transaction.UserTransaction;
 
-import com.arjuna.ats.arjuna.common.arjPropertyManager;
-import com.arjuna.ats.jdbc.TransactionalDriver;
+import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple;
 import com.arjuna.ats.jta.TransactionManager;
-import com.arjuna.ats.jta.common.JTAEnvironmentBean;
-import com.arjuna.ats.jta.common.jtaPropertyManager;
-import com.arjuna.common.internal.util.propertyservice.BeanPopulator;
 import org.apache.commons.dbcp2.BasicDataSource;
-import org.apache.commons.dbcp2.ConnectionFactory;
-import org.apache.commons.dbcp2.DriverConnectionFactory;
-import org.apache.commons.dbcp2.PoolableConnection;
-import org.apache.commons.dbcp2.PoolableConnectionFactory;
-import org.apache.commons.dbcp2.PoolingDataSource;
 import org.apache.commons.dbcp2.managed.BasicManagedDataSource;
-import org.apache.commons.dbcp2.managed.ManagedConnection;
-import org.apache.commons.pool2.ObjectPool;
-import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.drools.persistence.jta.JtaTransactionManager;
 import org.jbpm.runtime.manager.impl.DefaultRegisterableItemsFactory;
 import org.jbpm.runtime.manager.impl.jpa.EntityManagerFactoryManager;
 import org.jbpm.services.task.identity.JBossUserGroupCallbackImpl;
+import org.jbpm.test.performance.jbpm.dbcp.TransactionManagerWrapper;
+import org.jbpm.test.performance.jbpm.dbcp.TransactionSynchronizationRegistryWrapper;
 import org.kie.api.event.process.ProcessEventListener;
 import org.kie.api.event.rule.AgendaEventListener;
 import org.kie.api.io.ResourceType;
@@ -89,6 +77,9 @@ public class JBPMController {
     protected AgendaEventListener customAgendaListener;
     protected TaskLifeCycleEventListener customTaskListener;
     protected Map<String, Object> customEnvironmentEntries = new HashMap<String, Object>();
+
+    private static TransactionSynchronizationRegistryWrapper transactionSynchronizationRegistryWrapper = new TransactionSynchronizationRegistryWrapper(new TransactionSynchronizationRegistryImple());
+    private static TransactionManagerWrapper transactionManagerWrapper = new TransactionManagerWrapper(TransactionManager.transactionManager(), transactionSynchronizationRegistryWrapper);
 
     private static JBPMController instance;
 
@@ -320,19 +311,21 @@ public class JBPMController {
                 xadsClass.getMethod("setPassword", new Class[]{String.class}).invoke(xads, dsProps.getProperty("password").toUpperCase());
             }
 
+
+            InitialContext initContext = new InitialContext();
+            initContext.rebind("java:comp/UserTransaction", transactionManagerWrapper);
+            initContext.rebind("java:comp/TransactionManager", transactionManagerWrapper);
+            initContext.rebind("java:comp/TransactionSynchronizationRegistry", transactionSynchronizationRegistryWrapper);
+
             BasicManagedDataSource pds = new BasicManagedDataSource();
             pds.setXaDataSourceInstance(xads);
-            pds.setTransactionManager(TransactionManager.transactionManager());
+            pds.setTransactionManager(transactionManagerWrapper);
             pds.setRollbackOnReturn(false);
             pds.setEnableAutoCommitOnReturn(false);
             pds.setMaxTotal(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
             pds.setInitialSize(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
-
-            InitialContext initContext = new InitialContext();
-            initContext.rebind("java:comp/UserTransaction", com.arjuna.ats.jta.UserTransaction.userTransaction());
-            initContext.rebind("java:comp/TransactionManager", TransactionManager.transactionManager());
-            initContext.rebind("java:comp/TransactionSynchronizationRegistry", new com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple());
             initContext.rebind(datasourceName, pds);
+
             return pds;
 
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException | NamingException e) {
