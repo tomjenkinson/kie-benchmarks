@@ -320,18 +320,15 @@ public class JBPMController {
                 xadsClass.getMethod("setPassword", new Class[]{String.class}).invoke(xads, dsProps.getProperty("password").toUpperCase());
             }
 
-            BasicDataSource pds = new BasicDataSource();
-            pds.setMaxTotal(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
-            pds.setUsername(dsProps.getProperty("user"));
-            pds.setPassword(dsProps.getProperty("password"));
-            pds.setUrl("jdbc:arjuna:sharedDataSource");
-            pds.setDriver(new com.arjuna.ats.jdbc.TransactionalDriver());
+            BasicManagedDataSource pds = new BasicManagedDataSource();
+            pds.setXaDataSourceInstance(xads);
+            pds.setTransactionManager(TransactionManager.transactionManager());
             pds.setRollbackOnReturn(false);
             pds.setEnableAutoCommitOnReturn(false);
+            pds.setMaxTotal(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
+            pds.setInitialSize(Integer.parseInt(dsProps.getProperty("maxPoolSize")));
 
             InitialContext initContext = new InitialContext();
-            initContext.rebind("sharedDataSource", xads);
-
             initContext.rebind("java:comp/UserTransaction", com.arjuna.ats.jta.UserTransaction.userTransaction());
             initContext.rebind("java:comp/TransactionManager", TransactionManager.transactionManager());
             initContext.rebind("java:comp/TransactionSynchronizationRegistry", new com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple());
